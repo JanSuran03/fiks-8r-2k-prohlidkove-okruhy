@@ -1,0 +1,5 @@
+Cesta existuje
+Cesta neexistuje
+Cesta existuje
+Cesta existuje
+Cesta neexistuje
