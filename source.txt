@@ -1,3 +1,5 @@
+;; původní přípona souboru: .clj (Clojure - dynamický funkcionální imutabilní LISP běžící na JVM)
+
 (ns prohlidkove-okruhy.core
   (:require [clojure.string :as str]
             [loom.graph :refer :all]
