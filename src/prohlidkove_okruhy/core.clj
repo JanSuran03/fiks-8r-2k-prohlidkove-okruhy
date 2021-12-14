@@ -2,14 +2,52 @@
   (:require [clojure.string :as str])
   (:import (clojure.lang PersistentQueue)))
 
-(def graph-data [[1 2] [2 5] [6 7]
-                 [3 5] [4 8] [4 2]
-                 [1 6] [6 8] [4 9]
-                 [9 3] [8 9] [8 7]])
+; https://fiks.fit.cvut.cz/files/tasks/season8/round2/prohlidkove-okruhy.pdf
+
+(defn read-and-process-input
+  "First, the function needs to figure out, how many times it will need to read the
+  input line.
+
+  I made a helper function `read-line-and-split-to-integers`, which reads the input
+  line as one string, splits the input by spaces and reads all the pieces of string
+  so it gets a number from each of them, returning a sequence of numbers.
+
+  By doing this, we first get number of crossroads (vertices), which we don't need,
+  number of edges and number of queries.
+
+  Then we load edges:
+  We start with i = num-edges. While i > 0, we read the input, split it into strings
+  and read each of the strings. Then we append the edge (vector of two vertices) to
+  a Clojure list (linked list - will guarantee the asymptotic computational complexity
+  of reading the input to be constant) we will return after reading the required number
+  of edges.
+
+  Then we load queries - the same way we load edges where `i` will start at num-queries
+  instead.
+
+  Finally, the function returns a vector of [edges queries]."
+  []
+  (let [read-line-and-split-to-integers #(as-> (read-line) input
+                                               (str/split input #"\ ")
+                                               (map read-string input))
+        [_num-crossroads num-edges num-queries] (read-line-and-split-to-integers)
+        edges (loop [i num-edges
+                     edges ()]
+                (if (pos? i)
+                  (recur (dec i)
+                         (conj edges (read-line-and-split-to-integers)))
+                  edges))
+        queries (loop [i num-queries
+                       queries ()]
+                  (if (pos? i)
+                    (recur (dec i)
+                           (conj queries (read-line-and-split-to-integers)))
+                    queries))]
+    [edges queries]))
 
 (defn directed-graph
-  "Takes any number of edges (directly, not as a sequence of edges) where each of them
-  is in a vector in format [vertex-1 vertex-2].
+  "Takes a sequence of edges  where each of them is in a vector in format
+  [vertex-1 vertex-2].
 
   The function returns a hash-map of the key as a literal and the value as a sequence of
   successors, e.g.:
@@ -24,13 +62,13 @@
 
    We could have a hash-set of the successors since we don't care about their order, but
    for this task specifically, we don't need to - we're going to iterate over all of
-   them anyway=> creating such a set would cost us some performance, we use a Clojure
+   them anyway => creating such a set would cost us some performance, we use a Clojure
    list (which works as a linked list) instead.
 
    It also makes inserting new vertices into an already existing list when a new edge
    from an already existing vertex is found super efficient - with O(1). If the vertex is
    not yet present in the adjacency map, we create a new linked list with the successor."
-  [& edges]
+  [edges]
   (loop [[[v1 v2 :as edge] & more] edges
          adjacency-map {}]
     (if edge
@@ -83,9 +121,7 @@
          queue (conj PersistentQueue/EMPTY root)]
     (if (seq queue)
       (let [popped-queue (pop queue)
-
             peek-elem (peek queue)
-
             successors (get graph-as-adjacency-map peek-elem)
 
             [new-visited new-queue found?]
@@ -112,3 +148,24 @@
           (recur new-visited
                  new-queue)))
       false)))
+
+(defn path-exists?
+  "Just a convenient function to separate pure BFS from a specific string output. Directly
+  makes the console output."
+  [graph-as-adjacency-map root target]
+  (if (breadth-first-search graph-as-adjacency-map root target)
+    (println "Cesta existuje")
+    (println "Cesta neexistuje")))
+
+(defn -main
+  "The main function of the program. First, reads the input from the console and stores
+  it to values `edges` and `queries`.
+  Then builds a graph from the edges.
+  For each [root target], vertices pair of queries, tries to find a path from the root to
+  the target vertex and prints out the corresponding string, based on whether the path was
+  found, or not,"
+  [& _args]
+  (let [[edges queries] (read-and-process-input)
+        graph (directed-graph edges)]
+    (doseq [[root target] queries]
+      (path-exists? graph root target))))
