@@ -1,100 +1,114 @@
 (ns prohlidkove-okruhy.core
-  (:require [clojure.string :as str]
-            [loom.graph :refer :all]
-            [loom.alg :as alg]))
-;;  [clojure.string :as str] načte namespace clojure.str, na nějž můžu odkazovat jako str/<něco>
-;;  [loom.graph :refer :all] mi umožní přímo použít všechny nadefinované funkce/konstanty z namespacu loom.graph.
+  (:require [clojure.string :as str])
+  (:import (clojure.lang PersistentQueue)))
 
-;;  Důležité body obecně:
-;;  1) Prefixní notace: (+ 1 2 3)   =   1 + 2 + 3
-;;  2) Clojure je dynamicky typovaný (nápovědy pro compiler jsou ve více než 99 % případů zbytečné).
-;;  3) Clojure používá vytrvalé imutabilní datové struktury. To nám umožňuje v téměř konstantním čase kopírovat datové
-;;     struktury a extrémně efektivně s nimi pracovat, aniž bychom je měnili na místě.
-;;  2/3) Proto nikde neuvidíte nic jako "public static int i = ...;" - umožňuje mi to "kódit" mnohem efektivněji.
-;;
-;;  (defn fn-name [<args>]
-;;     ...
-;;     ...
-;;     xyz)
-;;  (forma vždy vrací poslední hodnotu)
-;;
-;;  je stejné jako v Pythonu
-;;  def fn-name(<args>):
-;;      ...
-;;      ...
-;;      return xyz
-;;
-;;  Threading macro (->>) funguje následujícím způsobem: Zhodnotí první formu/funkci, její
-;;  výsledek dá jako poslední argument do druhé funkce, to jako poslední argument do další atd.
-;;
-;;  slurp přečte soubor a vrátí jej jako string.
-;;
-;;  str/split-lines rozdělí vstupní soubor podle \n nebo \r.
-;;
-;;  (map f coll) aplikuje funkci f na každý prvek kolekce a vrátí novou (línou) sekvenci, např.
-;;  (map inc [4 2 0]) => (5 3 1)
-;;  (po vyprintování je ohraničená závorkami), viz (map read-string ...) níže
-;;
-;;  #(... % ...) značí anonymní funkci. Konkrétně tato funkce se dá přepsat jako:
-;;  (fn [arg-1]
-;;    (... arg-1 ...))
-;;
-;;  as-> threading macro funguje takto: první argument (v tomto případě) nahradíme symbolem <>;
-;;  zhodnotíme první formu a ta se stane novou hodnotou symbolu <>. A takto postupujeme dál
-;;  a dál... nakonec funkce vrátí hodnotu symbolu <>.
-;;
-;;  str/split rozdělí string podle \"regular expression\", která je převzatá z Javy. Vrátí
-;;  vektor (pole), např. (str/split "a b c" #"\ ") => ["a" "b" "c"]
-;;
-;;  Protože jsou všechny argumenty čísla, všechny stringy vklidu přečíst jako 3 čísla (integery):
-;;  (map read-string ["1" "2" "3"]) => (1 2 3)
-;;
-;;  Návratová hodnota funkce může vypadat např. takto:
-;;  ((10 2 3) (4 5) (6 7) (8 9) (10 11) (12 13)) ... řekněme, že toto je nyní `output`.
-;;  Clojure má velice vychytaný tzv. destructuring. To nám umožní v `let` makru lokálně přiřadit
-;;  více symbolům danou hodnotu:
-;;  [něco & input] = output   znamená, že něco je první prvek outputu a zbytek označíme jako ìnput
-;;  [_num-crossroads num-edges _num-queries] něco   znamená, že _num-crossroads je první, num-edges
-;;  druhý a _num-queries třetí prvek něčeho. Je zvyk, že nepoužité symboly začínají podtržítkem.
-;;  jak nyní vypadá stav lokálních vazeb:
-;;  ((4 5) (6 7) (8 9) (10 11) (12 13)) ... input
-;;  10 ... _num-crossroads
-;;  2 ... num-edges
-;;  3 ... _num-queries
-;;
-;;  funkce (split-at n coll) rozdělí kolekci na dvě části:
-;;  [(take n coll) (drop n coll)]
+(def graph-data [[1 2] [2 5] [6 7]
+                 [3 5] [4 8] [4 2]
+                 [1 6] [6 8] [4 9]
+                 [9 3] [8 9] [8 7]])
 
-(defn read-and-process-input []
-  (let [[[_num-crossroads num-edges _num-queries] & input]
-        (->> "input.txt" slurp
-             str/split-lines
-             (map #(as-> % <>
-                         (str/split <> #"\ ")
-                         (map read-string <>))))]
-    (split-at num-edges input)))
+(defn directed-graph
+  "Takes any number of edges (directly, not as a sequence of edges) where each of them
+  is in a vector in format [vertex-1 vertex-2].
 
-;;  Funkce path-exists využívá funkce z knihovny https://github.com/aysylu/loom, Clojure knihovny pro
-;;  grafové operace.
-;;  Je to prosté - pokud cesta existuje, (alg/bf-path graph vertex-1 vertex-2) nám tuto cestu vrátí,
-;;  jinak nám vrátí nil; nil & false jsou v Clojure logické nepravdy. Podle toho nám bude navrácen
-;;  vhodný string.
+  The function returns a hash-map of the key as a literal and the value as a sequence of
+  successors, e.g.:
 
-(defn path-exists? [graph [vertex-1 vertex-2 :as _query]]
-  (if (alg/bf-path graph vertex-1 vertex-2)
-    "Cesta existuje"
-    "Cesta neexistuje"))
+  (directed-graph [v-1 v-2] [v-1 v-3] [v-2 v-5] [v-3 v-2] [v-3 v-4])
+  => {v-1  (v-2 v-3)
+      v-2  (v-5)
+      v-3  (s-2 v-4)}
 
-;;  Pomocí destructuringu si označíme edges & queries jako první & druhý prvek výstupové hodnoty
-;;  volání funkce (read-and-process-input) s 0 argumenty.
-;;  graph je náš graf. Funkce digraph (directed graph = orientovaný nehodnocený graf) bere dvojice vrcholů.
-;;  (apply digraph [[1 2] [3 4]]) je identické s (digraph [1 2] [3 4]).
-;;  pro každý dotaz (dvojice vrcholů) zjistíme, zda cesta existuje. Tyto návratové stringy spojíme
-;;  znakem \n (newline) a funkce spit tento string vypíše do souboru "output.txt".
+   Why this data structure? Well, after we pop a vertex from the queue during BFS, we
+   want to quickly get its successors - by looking into this hash-map.
 
-(defn -main [& _args]
-  (let [[edges queries] (read-and-process-input)
-        graph (apply digraph edges)]
-    (->> queries (map #(path-exists? graph %))
-         (str/join "\n")
-         (spit "output.txt"))))
+   We could have a hash-set of the successors since we don't care about their order, but
+   for this task specifically, we don't need to - we're going to iterate over all of
+   them anyway=> creating such a set would cost us some performance, we use a Clojure
+   list (which works as a linked list) instead.
+
+   It also makes inserting new vertices into an already existing list when a new edge
+   from an already existing vertex is found super efficient - with O(1). If the vertex is
+   not yet present in the adjacency map, we create a new linked list with the successor."
+  [& edges]
+  (loop [[[v1 v2 :as edge] & more] edges
+         adjacency-map {}]
+    (if edge
+      (recur more
+             (update adjacency-map v1 conj v2))
+      adjacency-map)))
+
+(defn breadth-first-search
+  "Yeah. Breadth first search again. But... functional, immutable?
+
+  Since we neither care about the shortest path nor about the route, we can use the good
+  old breadth-first search which has the asymptotic computational complexity of O(V+E)
+  where V is the count of vertices and E the count of edges.
+
+  In this case, the BFS takes a directed graph as an adjacency map, the root and the
+  target we want to find.
+
+  First, we start our loop by initializing our collection of visited vertices as
+  a hash-set with 1 element, the root, because we later want to quickly find out whether
+  a vertex is already visited - by checking its presence in the hash-set, because that's
+  exactly what a hash-set is used for.
+  Then we initialize our queue with the root and do the following cycle. Remember we live
+  in an immutable world, therefore we don't change the collections on place:
+  LOOP 1:
+     1) We pop the queue -> `popped-queue`.
+     2) We mark the peek element as `peek-elem`.
+     3) We get the `peek-elem`'s successors and mark them as `successors`.
+     4) LOOP 2:
+        `new-visited` = `visited`
+        `new-queue` = `popped-queue`
+        For every `successor` in `successors`:
+        1) If the `successor` is nil (doesn't exist), return [`new-visited` `new-queue`].
+        2) Else if the `successor` is the target vertex, return
+           [`new-visited` `new-queue` true].
+        3) Else if we already know the successor, go back to `1)` of `LOOP 2` with the
+           next successor.
+        4) Else (if the vertex is unknown), go back to `1)` of `LOOP 2` with the next
+           successor and: 1) Add the successor to the set of `new-visited`.
+                          2) Add the successor to `new-queue`.
+     5) LOOP 2 returned: [`new-visited` `new-queue` *maybe-true*]:
+        If *maybe-true* is true, the function returns true - the target has been found.
+        If *maybe-true* is - in the case of 2nd step of `LOOP 2` - not present at all,
+           (it is nil and therefore a logical false), The function returns to LOOP 1 with
+           `new-visited` and `new-queue`.
+  With this algorithm, we gradually get to the point where there won't be any other
+  non-found successors and the queue will be empty. If we get to this point, the BFS
+  algorithm will return false - our target was not found."
+  [graph-as-adjacency-map root target]
+  (loop [visited #{root}
+         queue (conj PersistentQueue/EMPTY root)]
+    (if (seq queue)
+      (let [popped-queue (pop queue)
+
+            peek-elem (peek queue)
+
+            successors (get graph-as-adjacency-map peek-elem)
+
+            [new-visited new-queue found?]
+            (loop [new-visited visited
+                   new-queue popped-queue
+                   [first-successor & remaining-successors] successors]
+              (cond (not first-successor)
+                    [new-visited new-queue]
+
+                    (= first-successor target)
+                    [new-visited new-queue true]
+
+                    (contains? visited first-successor)
+                    (recur new-visited
+                           new-queue
+                           remaining-successors)
+
+                    :else
+                    (recur (conj new-visited first-successor)
+                           (conj new-queue first-successor)
+                           remaining-successors)))]
+        (if found?
+          true
+          (recur new-visited
+                 new-queue)))
+      false)))
