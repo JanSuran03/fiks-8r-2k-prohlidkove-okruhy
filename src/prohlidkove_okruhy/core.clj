@@ -23,7 +23,12 @@
   of edges.
 
   Then we load queries - the same way we load edges where `i` will start at num-queries
-  instead.
+  instead and, because order of queries matters (in the output) and linked list adds new
+  elements to the start, we have to use a vector (and we can also work with a transient
+  version of the vector if we really need even better performance - that makes the vector
+  modifiable, but not copyable, but we don't want to copy it anyway - creating
+  a transient version is O(1), same as calling `persistent!` on it).
+  (https://clojure.org/reference/transients)
 
   Finally, the function returns a vector of [edges queries]."
   []
@@ -35,14 +40,14 @@
                      edges ()]
                 (if (pos? i)
                   (recur (dec i)
-                         (conj edges (read-line-and-split-to-integers)))
+                         (cons edges (read-line-and-split-to-integers)))
                   edges))
         queries (loop [i num-queries
-                       queries ()]
+                       queries (transient [])]
                   (if (pos? i)
                     (recur (dec i)
-                           (conj queries (read-line-and-split-to-integers)))
-                    queries))]
+                           (conj! queries (read-line-and-split-to-integers)))
+                    (persistent! queries)))]
     [edges queries]))
 
 (defn directed-graph
